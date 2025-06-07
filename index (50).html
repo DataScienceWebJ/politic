@@ -1,0 +1,505 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Политический компас</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Inter', Arial, sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #d6eaf8 0%, #ffffff 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 40px;
+      color: #1a1a1a;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    header h1 {
+      font-size: 3.5rem;
+      font-weight: 700;
+      color: #2c3e50;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    header p {
+      font-size: 1.4rem;
+      color: #34495e;
+      margin-top: 0.8rem;
+    }
+
+    .quiz-container {
+      background: #ffffff;
+      padding: 3rem;
+      border-radius: 20px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+      max-width: 800px;
+      width: 100%;
+      text-align: center;
+      animation: fadeIn 0.6s ease-in;
+    }
+
+    .question {
+      font-size: 1.8rem;
+      font-weight: 600;
+      margin-bottom: 2rem;
+      line-height: 1.4;
+      color: #2c3e50;
+      position: relative;
+      cursor: help;
+    }
+
+    .question:hover .tooltip {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    .tooltip {
+      visibility: hidden;
+      opacity: 0;
+      background: #34495e;
+      color: #ffffff;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      position: absolute;
+      top: -50px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.9rem;
+      white-space: nowrap;
+      transition: opacity 0.3s ease;
+      z-index: 1;
+    }
+
+    .options {
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+
+    .option-btn {
+      background: linear-gradient(90deg, #3498db, #2980b9);
+      color: #ffffff;
+      padding: 1.2rem;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.2rem;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .option-btn:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .progress-bar {
+      margin-top: 2rem;
+      width: 100%;
+      height: 12px;
+      background: #dfe9f3;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #27ae60, #2ecc71);
+      transition: width 0.4s ease;
+    }
+
+    .progress-text {
+      margin-top: 0.8rem;
+      font-size: 1.1rem;
+      color: #34495e;
+    }
+
+    .result-container {
+      text-align: center;
+      max-width: 800px;
+      width: 100%;
+      animation: fadeIn 0.6s ease-in;
+    }
+
+    .result-text {
+      font-size: 1.4rem;
+      margin: 2rem 0;
+      line-height: 1.6;
+      color: #2c3e50;
+    }
+
+    .compass {
+      position: relative;
+      width: 500px;
+      height: 500px;
+      margin: 2.5rem auto;
+      background: #ffffff;
+      border: 4px solid #2c3e50;
+      border-radius: 20px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.25);
+      overflow: hidden;
+    }
+
+    .compass-bg {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(to right, #e74c3c 50%, #3498db 50%);
+      opacity: 0.7;
+    }
+
+    .compass-bg::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 50%;
+      background: linear-gradient(to bottom, #2c3e50 50%, transparent 50%);
+      opacity: 0.5;
+    }
+
+    .compass-grid {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: repeating-linear-gradient(to right, transparent, transparent 49px, #dfe9f3 50px),
+                  repeating-linear-gradient(to bottom, transparent, transparent 49px, #dfe9f3 50px);
+      z-index: 1;
+    }
+
+    .compass-point {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: #f1c40f;
+      border-radius: 50%;
+      border: 4px solid #ffffff;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
+      z-index: 3;
+      animation: pulse 1.5s infinite;
+    }
+
+    .compass-label {
+      position: absolute;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #ffffff;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+      z-index: 2;
+    }
+
+    .compass-label.top-left { top: 20px; left: 20px; }
+    .compass-label.top-right { top: 20px; right: 20px; }
+    .compass-label.bottom-left { bottom: 20px; left: 20px; }
+    .compass-label.bottom-right { bottom: 20px; right: 20px; }
+    .compass-label.axis-x-left { top: 50%; left: 10px; transform: translateY(-50%); }
+    .compass-label.axis-x-right { top: 50%; right: 10px; transform: translateY(-50%); }
+    .compass-label.axis-y-top { top: 10px; left: 50%; transform: translateX(-50%); }
+    .compass-label.axis-y-bottom { bottom: 10px; left: 50%; transform: translateX(-50%); }
+
+    .restart-btn, .details-btn, .download-btn {
+      background: linear-gradient(90deg, #27ae60, #2ecc71);
+      color: #ffffff;
+      padding: 1.2rem 2.5rem;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.2rem;
+      cursor: pointer;
+      margin: 0.8rem;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .details-btn {
+      background: linear-gradient(90deg, #e67e22, #d35400);
+    }
+
+    .download-btn {
+      background: linear-gradient(90deg, #9b59b6, #8e44ad);
+    }
+
+    .restart-btn:hover, .details-btn:hover, .download-btn:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .details-container {
+      margin-top: 2rem;
+      padding: 2rem;
+      background: #f9f9f9;
+      border-radius: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-size: 1.1rem;
+      color: #2c3e50;
+    }
+
+    .details-container p {
+      margin-bottom: 1.2rem;
+    }
+
+    .details-container .lr-positive { color: #3498db; }
+    .details-container .lr-negative { color: #e74c3c; }
+    .details-container .al-positive { color: #2c3e50; }
+    .details-container .al-negative { color: #27ae60; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+
+    @media (max-width: 700px) {
+      header h1 { font-size: 2.5rem; }
+      header p { font-size: 1.1rem; }
+      .quiz-container, .result-container { padding: 2rem; }
+      .question { font-size: 1.4rem; }
+      .option-btn { font-size: 1rem; padding: 1rem; }
+      .compass { width: 350px; height: 350px; }
+      .compass-label { font-size: 1rem; }
+      .restart-btn, .details-btn, .download-btn { padding: 1rem 2rem; font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Политический компас</h1>
+    <p>Пройдите тест из 30 вопросов и определите свои политические взгляды!</p>
+  </header>
+  <div class="quiz-container" id="quiz">
+    <h2 class="question" id="question"><span class="tooltip" id="tooltip"></span></h2>
+    <div class="options" id="options"></div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <p class="progress-text" id="progress-text"></p>
+  </div>
+
+  <script>
+    const questions = [
+      { text: "Государство должно регулировать экономику для защиты граждан.", lr: -2, al: 2, tooltip: "Оценка роли государства в экономике." },
+      { text: "Свободный рынок эффективнее государственного контроля.", lr: 2, al: -2, tooltip: "Свобода рынка против государственного вмешательства." },
+      { text: "Права меньшинств должны быть защищены законом.", lr: -2, al: -2, tooltip: "Защита прав социальных групп." },
+      { text: "Традиционные семейные ценности должны быть приоритетом.", lr: 2, al: 2, tooltip: "Роль традиций в обществе." },
+      { text: "Глобализация приносит больше пользы, чем вреда.", lr: -2, al: -2, tooltip: "Влияние глобализации на общество." },
+      { text: "Национальная безопасность важнее личных свобод.", lr: 2, al: 2, tooltip: "Баланс между безопасностью и свободами." },
+      { text: "Государство должно обеспечивать бесплатное здравоохранение.", lr: -2, al: 2, tooltip: "Доступность медицинских услуг." },
+      { text: "Частные компании лучше справляются с предоставлением услуг.", lr: 2, al: -2, tooltip: "Эффективность частного сектора." },
+      { text: "Свобода слова должна быть абсолютной.", lr: 0, al: -2, tooltip: "Ограничения на свободу слова." },
+      { text: "Государство должно контролировать СМИ для предотвращения дезинформации.", lr: 0, al: 2, tooltip: "Контроль над информацией." },
+      { text: "Равенство результатов важнее равенства возможностей.", lr: -2, al: 2, tooltip: "Социальная справедливость vs возможности." },
+      { text: "Налоги на богатых должны быть выше.", lr: -2, al: 2, tooltip: "Прогрессивное налогообложение." },
+      { text: "Государство должно ограничивать иммиграцию.", lr: 2, al: 2, tooltip: "Политика в отношении иммиграции." },
+      { text: "Индивидуальная свобода важнее общественного порядка.", lr: 0, al: -2, tooltip: "Баланс между личной свободой и порядком." },
+      { text: "Государство должно субсидировать образование.", lr: -2, al: 2, tooltip: "Доступность образования." },
+      { text: "Религия должна играть важную роль в обществе.", lr: 2, al: 2, tooltip: "Роль религии в общественной жизни." },
+      { text: "Экологические нормы должны быть приоритетом.", lr: -2, al: 2, tooltip: "Экология vs экономика." },
+      { text: "Экономический рост важнее экологических ограничений.", lr: 2, al: -2, tooltip: "Приоритет экономического развития." },
+      { text: "Государство должно вмешиваться для сокращения неравенства.", lr: -2, al: 2, tooltip: "Социальное неравенство." },
+      { text: "Частная собственность должна быть неприкосновенной.", lr: 2, al: -2, tooltip: "Право на частную собственность." },
+      { text: "Государство должно поддерживать национальную культуру.", lr: 2, al: 2, tooltip: "Сохранение культурной идентичности." },
+      { text: "Личные свободы должны быть ограничены ради безопасности.", lr: 0, al: 2, tooltip: "Свободы vs безопасность." },
+      { text: "Профсоюзы необходимы для защиты прав работников.", lr: -2, al: 2, tooltip: "Роль профсоюзов." },
+      { text: "Государство должно контролировать цены на товары первой необходимости.", lr: -2, al: 2, tooltip: "Контроль цен." },
+      { text: "Военные расходы должны быть увеличены.", lr: 2, al: 2, tooltip: "Приоритет военных расходов." },
+      { text: "Государство должно поддерживать малый бизнес.", lr: 2, al: -2, tooltip: "Поддержка предпринимательства." },
+      { text: "Культурное разнообразие обогащает общество.", lr: -2, al: -2, tooltip: "Мультикультурализм." },
+      { text: "Государство должно вмешиваться в семейные вопросы.", lr: 0, al: 2, tooltip: "Роль государства в семье." },
+      { text: "Технологический прогресс должен регулироваться государством.", lr: -2, al: 2, tooltip: "Контроль технологий." },
+      { text: "Индивидуализм важнее коллективных ценностей.", lr: 2, al: -2, tooltip: "Индивидуализм vs коллективизм." },
+    ];
+
+    const scores = { leftRight: 0, authLib: 0 };
+    let currentQuestion = 0;
+    const userAnswers = [];
+
+    const questionEl = document.getElementById('question');
+    const tooltipEl = document.getElementById('tooltip');
+    const optionsEl = document.getElementById('options');
+    const progressFill = document.getElementById('progress-fill');
+    const progressText = document.getElementById('progress-text');
+
+    function loadQuestion() {
+      const q = questions[currentQuestion];
+      questionEl.innerHTML = `${q.text}<span class="tooltip" id="tooltip">${q.tooltip}</span>`;
+      optionsEl.innerHTML = '';
+      const options = ["Полностью согласен", "Скорее согласен", "Нейтрально", "Скорее не согласен", "Полностью не согласен"];
+      options.forEach((option, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.textContent = option;
+        btn.onclick = () => handleAnswer(index, option);
+        optionsEl.appendChild(btn);
+      });
+      progressFill.style.width = `${(currentQuestion / questions.length) * 100}%`;
+      progressText.textContent = `Вопрос ${currentQuestion + 1} из ${questions.length}`;
+    }
+
+    function handleAnswer(optionIndex, optionText) {
+      const q = questions[currentQuestion];
+      const multiplier = [2, 1, 0, -1, -2][optionIndex];
+      const lrScore = q.lr * multiplier;
+      const alScore = q.al * multiplier;
+      scores.leftRight += lrScore;
+      scores.authLib += alScore;
+      userAnswers.push({ question: q.text, answer: optionText, lr: lrScore, al: alScore });
+
+      if (currentQuestion < questions.length - 1) {
+        currentQuestion++;
+        loadQuestion();
+      } else {
+        showResult();
+      }
+    }
+
+    function showResult() {
+      let resultText = '';
+      const lr = Math.max(-60, Math.min(60, scores.leftRight));
+      const al = Math.max(-60, Math.min(60, scores.authLib));
+
+      if (lr < -30) resultText += 'Явно левые';
+      else if (lr < -10) resultText += 'Умеренно левые';
+      else if (lr > 30) resultText += 'Явно правые';
+      else if (lr > 10) resultText += 'Умеренно правые';
+      else resultText += 'Центристские (по экономике)';
+
+      resultText += ', ';
+
+      if (al > 30) resultText += 'явно авторитарные';
+      else if (al > 10) resultText += 'умеренно авторитарные';
+      else if (al < -30) resultText += 'явно либертарианские';
+      else if (al < -10) resultText += 'умеренно либертарианские';
+      else resultText += 'центристские (по свободам)';
+
+      resultText += ' взгляды.';
+
+      let description = '';
+      if (lr < -10 && al > 10) description = 'Вы поддерживаете государственное вмешательство в экономику и строгий контроль в общественной жизни, отдавая предпочтение социальной справедливости и порядку.';
+      else if (lr > 10 && al > 10) description = 'Вы выступаете за свободный рынок, но поддерживаете сильное государственное управление и традиционные ценности.';
+      else if (lr < -10 && al < -10) description = 'Вы поддерживаете социальную справедливость и максимальные личные свободы, выступая против чрезмерного контроля государства.';
+      else if (lr > 10 && al < -10) description = 'Вы сторонник свободного рынка и минимального вмешательства государства, ценя индивидуальные свободы.';
+      else description = 'Ваши взгляды сбалансированы, вы стремитесь к компромиссу между экономическими и социальными приоритетами.';
+
+      const quizEl = document.getElementById('quiz');
+      quizEl.className = 'result-container';
+      quizEl.innerHTML = `
+        <h2 class="question">Ваш результат</h2>
+        <p class="result-text">${resultText}<br><br>${description}</p>
+        <div class="compass">
+          <div class="compass-bg"></div>
+          <div class="compass-grid"></div>
+          <div class="compass-label top-left">Авторитарно-левые</div>
+          <div class="compass-label top-right">Авторитарно-правые</div>
+          <div class="compass-label bottom-left">Либертарианско-левые</div>
+          <div class="compass-label bottom-right">Либертарианско-правые</div>
+          <div class="compass-label axis-x-left">Левые</div>
+          <div class="compass-label axis-x-right">Правые</div>
+          <div class="compass-label axis-y-top">Авторитарные</div>
+          <div class="compass-label axis-y-bottom">Либертарианские</div>
+          <div class="compass-point" style="left: ${250 + (lr / 60) * 240}px; top: ${250 - (al / 60) * 240}px;"></div>
+        </div>
+        <button class="restart-btn">Пройти заново</button>
+        <button class="details-btn">Посмотреть ответы</button>
+        <button class="download-btn">Скачать результаты</button>
+        <div class="details-container" id="details" style="display: none;"></div>
+      `;
+
+      document.querySelector('.restart-btn').onclick = () => {
+        currentQuestion = 0;
+        scores.leftRight = 0;
+        scores.authLib = 0;
+        userAnswers.length = 0;
+        quizEl.className = 'quiz-container';
+        quizEl.innerHTML = `
+          <h2 class="question" id="question"><span class="tooltip" id="tooltip"></span></h2>
+          <div class="options" id="options"></div>
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+          <p class="progress-text" id="progress-text"></p>
+        `;
+        loadQuestion();
+      };
+
+      document.querySelector('.details-btn').onclick = () => {
+        const detailsEl = document.getElementById('details');
+        detailsEl.style.display = detailsEl.style.display === 'none' ? 'block' : 'none';
+        if (detailsEl.style.display === 'block') {
+          detailsEl.innerHTML = userAnswers.map((ans, i) => `
+            <p><strong>Вопрос ${i + 1}:</strong> ${ans.question}<br>
+            <strong>Ваш ответ:</strong> ${ans.answer}<br>
+            <strong>Влияние:</strong> 
+            ${ans.lr !== 0 ? `<span class="${ans.lr > 0 ? 'lr-positive' : 'lr-negative'}">Левые/Правые: ${ans.lr > 0 ? '+' : ''}${ans.lr}</span>` : ''} 
+            ${ans.al !== 0 ? `<span class="${ans.al > 0 ? 'al-positive' : 'al-negative'}">Авторитаризм/Либертарианство: ${ans.al > 0 ? '+' : ''}${ans.al}</span>` : ''}</p>
+          `).join('');
+        }
+      };
+
+      document.querySelector('.download-btn').onclick = () => {
+        const content = `Политический компас: Результаты\n\n${resultText}\n\nОписание:\n${description}\n\nОтветы:\n${userAnswers.map((ans, i) => `Вопрос ${i + 1}: ${ans.question}\nОтвет: ${ans.answer}\nВлияние: Левые/Правые: ${ans.lr}, Авторитаризм/Либертарианство: ${ans.al}`).join('\n\n')}`;
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'political_compass_results.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+    }
+
+    loadQuestion();
+  </script>
+</body>
+</html>
